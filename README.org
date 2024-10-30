@@ -3,3 +3,5 @@
 We present a new energy model tailored for the IoTvar middleware architecture, developed using power traces collected from a Raspberry Pi 4B. This model achieves state-of-the-art accuracy while offering improved generalizability, making it applicable across a wider range of IoT scenarios
 
 [[./images/comparison.png]]
+
+Refer to the [[./scripts/pipeline.org]] file for inference instructions.
