@@ -1,0 +1,893 @@
+#+title: Pipeline
+* Data pre-processing
+** Imports
+#+begin_src jupyter-python :kernel iotvar_powerprofiler :results silent
+import polars as pl
+import matplotlib.pyplot as plt
+import numpy as np
+#+end_src
+** Useful functions
+#+begin_src jupyter-python :kernel iotvar_powerprofiler :results silent
+def nearest_number(wanted, group):
+    wanted = np.array(wanted)
+    wanted = wanted / 1000
+    group = np.array(group)
+    nearest = []
+
+    for elem in wanted:
+        differences = np.abs(group-elem)
+        nearest_index = differences.argmin()
+        nearest.append((nearest_index,group[nearest_index]))
+
+    return nearest
+#+end_src
+
+** Reading csv files
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+# power_measurements = pl.read_csv("../data/2024-03-29_13-56-57.csv",truncate_ragged_lines=True) # 1kHz
+# power_measurements = pl.read_csv("../data/2024-04-05_12-28-46_sampling_500Hz.csv",truncate_ragged_lines=True) # 500Hz
+# power_measurements = pl.read_csv("../data/2024-04-07_13-42-52_sampling_300Hz.csv",truncate_ragged_lines=True) # 300Hz
+# power_measurements = pl.read_csv("../data/2024-04-09_11-58-16_sampling_50Hz.csv",truncate_ragged_lines=True) # 50Hz
+# power_measurements = pl.read_csv("../data/2024-04-12_11-50-14_sampling_250Hz.csv",truncate_ragged_lines=True) # 250Hz
+# power_measurements = pl.read_csv("../data/2024-04-12_11-50-14_sampling_250Hz.csv",truncate_ragged_lines=True) # 250Hz
+# power_measurements = pl.read_csv("../data/2024-03-22_15-05-24.csv") # 100Hz
+# power_measurements = pl.read_csv("../data/2024-04-13_18-28-02_sampling_25Hz.csv") # 25Hz
+# power_measurements = pl.read_csv("../data/new_data/2024-04-18_12-32-23_refresh_1seg_sampling_period_3ms.csv") # new
+# power_measurements = pl.read_csv("../data/new_data/2024-04-20_18-40-55_fixed_refresh_time_sampling_period_3ms.csv")
+# power_measurements = pl.read_csv("../data/new_data/2024-04-23_12-04-11_dynamic_refresh_time_5seconds_sampling_period_3ms.csv")
+# power_measurements = pl.read_csv("../data/new_data/2024-04-24_12-14-15_dynamic_refresh_time_10seconds_sampling_period_3ms.csv")
+# power_measurements = pl.read_csv("../data/new_data/2024-04-25_12-30-40_dynamic_refresh_time_15seconds_sampling_period_3ms.csv")
+# power_measurements = pl.read_csv("../data/new_data/2024-04-26_13-32-37_dynamic_refresh_time_20seconds_sampling_period_3ms.csv")
+# power_measurements = pl.read_csv("../data/new_data/2024-06-15_20-56-03_dynamic_refresh_time_3seconds_sampling_period_3ms.csv")
+# power_measurements = pl.read_csv("../data/new_data/2024-06-18_11-24-15_dynamic_refresh_time_3seconds.csv")
+power_measurements = pl.read_csv("../data/new_data/2024-06-19_21-37-07_dynamic_refresh_time_60seconds.csv")
+data = power_measurements.to_numpy()
+PCtimestamp = data[:,0]
+timer = data[:,1]
+current = data[:,2]
+voltage = data[:,3]
+power = data[:,4]
+
+#+end_src
+** Finding endTimestamps from experiment metadata
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+#experiment_metadata = pl.read_csv("../data/25_to_100_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/125_to_200_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/downsampling_to_100hz_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/upsampling_to_1kHz_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/sampling_500Hz_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/sampling_300Hz_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/sampling_50Hz_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/sampling_250Hz_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/sampling_25Hz_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/new_data/refresh_1seg_sampling_period_3ms_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/new_data/fixed_refresh_time_sampling_period_3ms_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/new_data/fixed_refresh_time_5seconds_sampling_period_3ms_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/new_data/dynamic_refresh_time_5seconds_sampling_period_3ms_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/new_data/dynamic_refresh_time_10seconds_sampling_period_3ms_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/new_data/dynamic_refresh_time_15seconds_sampling_period_3ms_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/new_data/dynamic_refresh_time_20seconds_sampling_period_3ms_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/new_data/dynamic_refresh_time_3seconds_sampling_period_3ms_experiment_metadata.csv")
+#experiment_metadata = pl.read_csv("../data/new_data/dynamic_refresh_time_3seconds_experiment_metadata.csv")
+experiment_metadata = pl.read_csv("../data/new_data/dynamic_refresh_time_60seconds_experiment_metadata.csv")
+experiment_metadata
+#+end_src
+
+#+RESULTS:
+#+begin_example
+shape: (187, 4)
+┌──────────────┬──────────┬───────────┬────────────────┐
+│ sensorNumber ┆ testTime ┆ freshness ┆ startTimestamp │
+│ ---          ┆ ---      ┆ ---       ┆ ---            │
+│ i64          ┆ i64      ┆ i64       ┆ i64            │
+╞══════════════╪══════════╪═══════════╪════════════════╡
+│ 25           ┆ 300      ┆ 60        ┆ 1718851134528  │
+│ 25           ┆ 300      ┆ 60        ┆ 1718851541186  │
+│ 25           ┆ 300      ┆ 60        ┆ 1718851938410  │
+│ 25           ┆ 300      ┆ 60        ┆ 1718852338817  │
+│ 25           ┆ 300      ┆ 60        ┆ 1718852742020  │
+│ …            ┆ …        ┆ …         ┆ …              │
+│ 200          ┆ 300      ┆ 60        ┆ 1718924244018  │
+│ 200          ┆ 300      ┆ 60        ┆ 1718924656028  │
+│ 200          ┆ 300      ┆ 60        ┆ 1718925064263  │
+│ 200          ┆ 300      ┆ 60        ┆ 1718925459047  │
+│ 200          ┆ 300      ┆ 60        ┆ 1718925856720  │
+└──────────────┴──────────┴───────────┴────────────────┘
+#+end_example
+
+Let's find the endTimestamp, for each case the experiment length was 300 seconds. The startTimestamp is measured in milliseconds so the endTimestamp will be computed using the following formula:
+
+$endTimestamp = 300*1e3 + startTimestamp$
+
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+endTimestamp = 300*1e3 + experiment_metadata['startTimestamp']
+experiment_metadata = experiment_metadata.with_columns(endTimestamp = endTimestamp)
+experiment_metadata
+#+end_src
+
+#+RESULTS:
+#+begin_example
+shape: (187, 5)
+┌──────────────┬──────────┬───────────┬────────────────┬──────────────┐
+│ sensorNumber ┆ testTime ┆ freshness ┆ startTimestamp ┆ endTimestamp │
+│ ---          ┆ ---      ┆ ---       ┆ ---            ┆ ---          │
+│ i64          ┆ i64      ┆ i64       ┆ i64            ┆ f64          │
+╞══════════════╪══════════╪═══════════╪════════════════╪══════════════╡
+│ 25           ┆ 300      ┆ 60        ┆ 1718851134528  ┆ 1.7189e12    │
+│ 25           ┆ 300      ┆ 60        ┆ 1718851541186  ┆ 1.7189e12    │
+│ 25           ┆ 300      ┆ 60        ┆ 1718851938410  ┆ 1.7189e12    │
+│ 25           ┆ 300      ┆ 60        ┆ 1718852338817  ┆ 1.7189e12    │
+│ 25           ┆ 300      ┆ 60        ┆ 1718852742020  ┆ 1.7189e12    │
+│ …            ┆ …        ┆ …         ┆ …              ┆ …            │
+│ 200          ┆ 300      ┆ 60        ┆ 1718924244018  ┆ 1.7189e12    │
+│ 200          ┆ 300      ┆ 60        ┆ 1718924656028  ┆ 1.7189e12    │
+│ 200          ┆ 300      ┆ 60        ┆ 1718925064263  ┆ 1.7189e12    │
+│ 200          ┆ 300      ┆ 60        ┆ 1718925459047  ┆ 1.7189e12    │
+│ 200          ┆ 300      ┆ 60        ┆ 1718925856720  ┆ 1.7189e12    │
+└──────────────┴──────────┴───────────┴────────────────┴──────────────┘
+#+end_example
+
+** Finding metadata's startTimestamps and endTimestamps in the csv timeline
+
+Now let's use our function to find the startTimestamp column and endTimestamp column.
+
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+csv_startTimestamp = nearest_number(experiment_metadata['startTimestamp'],power_measurements['unixTimestamp'])
+csv_endTimestamp = nearest_number(experiment_metadata['endTimestamp'],power_measurements['unixTimestamp'])
+csv_data = {"iotvarNumber":experiment_metadata['sensorNumber'],"startTimestamp":csv_startTimestamp,"endTimestamp":csv_endTimestamp}
+csv_timestamps = pl.DataFrame(csv_data,strict=False)
+csv_timestamps
+#+end_src
+
+#+RESULTS:
+#+begin_example
+shape: (187, 3)
+┌──────────────┬─────────────────────────┬─────────────────────────┐
+│ iotvarNumber ┆ startTimestamp          ┆ endTimestamp            │
+│ ---          ┆ ---                     ┆ ---                     │
+│ i64          ┆ list[f64]               ┆ list[f64]               │
+╞══════════════╪═════════════════════════╪═════════════════════════╡
+│ 25           ┆ [35772.0, 1.7189e9]     ┆ [135773.0, 1.7189e9]    │
+│ 25           ┆ [171326.0, 1.7189e9]    ┆ [271327.0, 1.7189e9]    │
+│ 25           ┆ [303735.0, 1.7189e9]    ┆ [403735.0, 1.7189e9]    │
+│ 25           ┆ [437204.0, 1.7189e9]    ┆ [537205.0, 1.7189e9]    │
+│ 25           ┆ [571606.0, 1.7189e9]    ┆ [671606.0, 1.7189e9]    │
+│ …            ┆ …                       ┆ …                       │
+│ 200          ┆ [2.4405698e7, 1.7189e9] ┆ [2.4505699e7, 1.7189e9] │
+│ 200          ┆ [2.4543036e7, 1.7189e9] ┆ [2.4643036e7, 1.7189e9] │
+│ 200          ┆ [2.4679115e7, 1.7189e9] ┆ [2.4779115e7, 1.7189e9] │
+│ 200          ┆ [2.481071e7, 1.7189e9]  ┆ [2.491071e7, 1.7189e9]  │
+│ 200          ┆ [2.4943268e7, 1.7189e9] ┆ [2.5043268e7, 1.7189e9] │
+└──────────────┴─────────────────────────┴─────────────────────────┘
+#+end_example
+** Saving the experiments into individual csv files
+
+#+begin_src jupyter-python :kernel iotvar_powerprofiler :results silent
+count = 1
+for i,start,stop in zip(csv_timestamps['iotvarNumber'],csv_timestamps['startTimestamp'],csv_timestamps['endTimestamp']):
+    instant_power = power[int(start[0]):int(stop[0])]
+    instant_current = current[int(start[0]):int(stop[0])]
+    instant_voltage = voltage[int(start[0]):int(stop[0])]
+    instant_timer = timer[int(start[0]):int(stop[0])]
+    instant_PCtimestamp = PCtimestamp[int(start[0]):int(stop[0])]
+    df = pl.from_dict({"unixTimestamp": instant_PCtimestamp,"ucTimestamp":instant_timer,"current_ma":instant_current,"voltage_v":instant_voltage,"power_mw":instant_power})
+    path = "../data/new_data/dynamic_refresh_time_60_refresh_time/"
+    name = 'numSensor_'+str(i) + '_numExperiment_'+ str(count)+'.csv'
+    df.write_csv(path+name,separator=",")
+    count +=1
+    if count>25:
+        count = 1
+#+end_src
+
+* Dataset making
+** Imports
+#+begin_src jupyter-python :kernel iotvar_powerprofiler :results silent
+import polars as pl
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+from scipy.optimize import curve_fit
+from sklearn.metrics import r2_score
+import seaborn as sns
+from scipy import stats
+#+end_src
+** Useful functions
+#+begin_src jupyter-python :kernel iotvar_powerprofiler :results silent
+def from_w_to_joule(freq,instant_power):
+    number_elems = int(len(instant_power)-1)
+    energy = np.zeros([number_elems])
+    for i in range(2,number_elems+2):
+        energy[i-2] = np.sum(instant_power[:i]) * 1/freq
+    return energy
+#+end_src
+** Parsing csv files from all the folders
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+path = "/home/han4n/2023-iotvar-hardware/Code/Phase_3/IoTVar_PowerProfiler/data/final_data/dynamic_refresh_time_1_refresh_time/"
+# path = "../data/final_data/dynamic_refresh_time_3_refresh_time/"
+# path = "../data/final_data/dynamic_refresh_time_5_refresh_time/"
+# path = "../data/final_data/dynamic_refresh_time_10_refresh_time/"
+# path = "../data/final_data/dynamic_refresh_time_15_refresh_time/"
+# path = "../data/final_data/dynamic_refresh_time_20_refresh_time/"
+# path = "../data/final_data/dynamic_refresh_time_60_refresh_time/"
+
+csv_files = [file for file in os.listdir(path) if file.endswith(".csv")]
+sen_num = []
+
+for filename in csv_files:
+    if filename[13] == '_':
+        sen_num.append(filename[10:13])
+    else:
+        sen_num.append(filename[10:12])
+
+power_measurements_dfs = []
+
+for file in csv_files:
+    file_path = os.path.join(path, file)
+    df = pl.read_csv(file_path)
+    power_measurements_dfs.append(df)
+
+energy_vectors = []
+freq = 333
+delta = freq*2
+filtered_index = []
+count_found = 0
+
+for df in power_measurements_dfs:
+    p = df["power_mw"]* 1e-3
+    p = np.array(p)
+    if(len(p)>100000-delta and len(p)<100000+delta):
+        energy = from_w_to_joule(freq,p)
+        energy_vectors.append(energy)
+    else:
+        filtered_index.append(count_found)
+    count_found +=1
+filtered_index.sort(reverse=True)
+for i in filtered_index:
+    del sen_num[i]
+#+end_src
+
+#+RESULTS:
+
+** Extracting m and b coefficients
+
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+def lin_fit(t,m,b):
+    return m*t+b
+
+m_5sec = []
+b_5sec = []
+r_2 = []
+
+T = 1/freq
+
+for i in range(len(energy_vectors)):
+    t = np.arange(T,(len(energy_vectors[i])+1)*T,T) - T
+    b_fixed = energy_vectors[i][0]
+    popt, pcov = curve_fit(lambda t, m: lin_fit(t, m, b_fixed), t,energy_vectors[i])
+    m_5sec.append(popt[0])
+    b_5sec.append(b_fixed)
+    rss_i = np.sum(np.square(energy_vectors[i]-lin_fit(t,*popt,b_fixed)))
+    rmse_i = np.sqrt(1/len(energy_vectors[i])*rss_i)
+    energy_mean_i = np.mean(energy_vectors[i])
+    deviation_squared = (energy_vectors[i]-energy_mean_i)**2
+    ss_tot = np.sum(deviation_squared)
+    r2_i = 1-rss_i/ss_tot
+    r_2.append(r2_i)
+#+end_src
+
+#+RESULTS:
+
+** Saving m, and b values to file
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+coefficients = np.zeros([4,len(sen_num)])
+coefficients[0,:] = np.ones(len(sen_num))*1
+coefficients[1,:] = np.array(sen_num)
+coefficients[2,:] = np.array(m_5sec)
+coefficients[3,:] = np.array(b_5sec)
+
+coeff_df= pl.from_numpy(coefficients, schema=["refresh_period", "number_sensors","m","b"], orient="col")
+coeff_df
+coeff_df_save_ready = coeff_df.select(
+    pl.col("refresh_period").cast(pl.Int32).alias("refresh_period"),
+    pl.col("number_sensors").cast(pl.Int32).alias("number_sensors"),
+    pl.col("m"),
+    pl.col("b")
+)
+print(coeff_df_save_ready)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+shape: (234, 4)
+┌────────────────┬────────────────┬──────────┬──────────┐
+│ refresh_period ┆ number_sensors ┆ m        ┆ b        │
+│ ---            ┆ ---            ┆ ---      ┆ ---      │
+│ i32            ┆ i32            ┆ f64      ┆ f64      │
+╞════════════════╪════════════════╪══════════╪══════════╡
+│ 1              ┆ 125            ┆ 2.715067 ┆ 0.016028 │
+│ 1              ┆ 175            ┆ 2.726258 ┆ 0.018799 │
+│ 1              ┆ 175            ┆ 2.696314 ┆ 0.013949 │
+│ 1              ┆ 125            ┆ 2.715509 ┆ 0.018014 │
+│ 1              ┆ 75             ┆ 2.708352 ┆ 0.016564 │
+│ …              ┆ …              ┆ …        ┆ …        │
+│ 1              ┆ 75             ┆ 2.682053 ┆ 0.013102 │
+│ 1              ┆ 125            ┆ 2.708828 ┆ 0.017545 │
+│ 1              ┆ 75             ┆ 2.724517 ┆ 0.013059 │
+│ 1              ┆ 50             ┆ 2.708188 ┆ 0.018653 │
+│ 1              ┆ 50             ┆ 2.694661 ┆ 0.023393 │
+└────────────────┴────────────────┴──────────┴──────────┘
+#+end_example
+
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+coeff_df_save_ready.write_csv('../data/final_data/coefficients_fixed_b/1sec.csv',separator=",")
+#+end_src
+
+#+RESULTS:
+
+** Saving real energy consumption curves for later analysis
+
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+refresh = coefficients[0,:]
+energy_df = pl.DataFrame({
+    "refresh_period": refresh.astype(int),
+    "number_sensors": np.array(sen_num).astype(int),
+    "energy":energy_vectors
+})
+print(energy_df)
+#+end_src
+#+RESULTS:
+#+begin_example
+shape: (234, 3)
+┌────────────────┬────────────────┬─────────────────────────────────┐
+│ refresh_period ┆ number_sensors ┆ energy                          │
+│ ---            ┆ ---            ┆ ---                             │
+│ i64            ┆ i64            ┆ list[f64]                       │
+╞════════════════╪════════════════╪═════════════════════════════════╡
+│ 1              ┆ 125            ┆ [0.016028, 0.030659, … 812.055… │
+│ 1              ┆ 175            ┆ [0.018799, 0.031129, … 816.095… │
+│ 1              ┆ 175            ┆ [0.013949, 0.023823, … 819.702… │
+│ 1              ┆ 125            ┆ [0.018014, 0.028458, … 813.764… │
+│ 1              ┆ 75             ┆ [0.016564, 0.026539, … 815.704… │
+│ …              ┆ …              ┆ …                               │
+│ 1              ┆ 75             ┆ [0.013102, 0.019644, … 806.750… │
+│ 1              ┆ 125            ┆ [0.017545, 0.028054, … 812.291… │
+│ 1              ┆ 75             ┆ [0.013059, 0.01959, … 816.2976… │
+│ 1              ┆ 50             ┆ [0.018653, 0.02819, … 810.3849… │
+│ 1              ┆ 50             ┆ [0.023393, 0.038262, … 809.698… │
+└────────────────┴────────────────┴─────────────────────────────────┘
+#+end_example
+
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+energy_df.write_ndjson('../data/final_data/coefficients_fixed_b/curves/1sec_curves.json')
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+read_df = pl.read_ndjson('../data/final_data/coefficients_fixed_b/curves/15sec_curves.json')
+print(read_df)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+shape: (136, 3)
+┌────────────────┬────────────────┬─────────────────────────────────┐
+│ refresh_period ┆ number_sensors ┆ energy                          │
+│ ---            ┆ ---            ┆ ---                             │
+│ i64            ┆ i64            ┆ list[f64]                       │
+╞════════════════╪════════════════╪═════════════════════════════════╡
+│ 15             ┆ 125            ┆ [0.01533, 0.024294, … 681.5258… │
+│ 15             ┆ 125            ┆ [0.016899, 0.024867, … 687.659… │
+│ 15             ┆ 50             ┆ [0.014816, 0.022231, … 682.884… │
+│ 15             ┆ 75             ┆ [0.016026, 0.023974, … 698.385… │
+│ 15             ┆ 100            ┆ [0.013977, 0.023708, … 694.867… │
+│ …              ┆ …              ┆ …                               │
+│ 15             ┆ 125            ┆ [0.015971, 0.02392, … 691.2900… │
+│ 15             ┆ 75             ┆ [0.016506, 0.024481, … 691.375… │
+│ 15             ┆ 50             ┆ [0.014927, 0.021503, … 684.322… │
+│ 15             ┆ 75             ┆ [0.012985, 0.019482, … 697.752… │
+│ 15             ┆ 50             ┆ [0.011575, 0.017355, … 687.357… │
+└────────────────┴────────────────┴─────────────────────────────────┘
+#+end_example
+* Model training
+** Imports
+#+begin_src jupyter-python :kernel iotvar_powerprofiler :results silent
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import polars as pl
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import tensorflow as tf
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import Dense, Dropout, Input
+from tensorflow.keras.optimizers import Adam
+import seaborn as sns
+import pandas as pd
+from tensorflow.keras import backend as K
+from sklearn.preprocessing import StandardScaler
+from scipy.stats import iqr
+from tensorflow.keras.models import load_model
+from joblib import dump, load
+import scipy.stats as stats
+import statsmodels.api as sm
+from sklearn.metrics import root_mean_squared_error
+#+end_src
+
+** Data loading
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+path = "../data/final_data/coefficients_fixed_b/"
+csv_files = [file for file in os.listdir(path) if file.endswith(".csv")]
+coeff_dfs = []
+
+for file in csv_files:
+    file_path = os.path.join(path, file)
+    df = pl.read_csv(file_path)
+    _iqr = iqr(df['m'])
+    p_25, p_75 = np.percentile(df['m'], [25, 75])
+    whisker_length= 1.5
+    upper_bound = p_75 + whisker_length * _iqr
+    lower_bound  = p_25 - whisker_length * _iqr
+    df_clean = df.filter((pl.col('m') > lower_bound)&(pl.col('m') < upper_bound))
+    coeff_dfs.append(df_clean)
+
+m_b_df_minus = pl.concat(coeff_dfs)
+m_b_df_minus = m_b_df_minus.filter((pl.col('refresh_period')!=3))
+m_b_3sec_df = pl.read_csv("../data/final_data/coefficients_fixed_b/3sec.csv")
+df_individual_sensor = m_b_3sec_df.filter(pl.col('m')>2.46)
+
+m_b_df = pl.concat([m_b_df_minus,df_individual_sensor])
+m_b_df
+#+end_src
+** Hyperparameter finding
+#+begin_src jupyter-python :kernel iotvar_powerprofiler :results silent
+import optuna
+def pinball_loss(tau):
+    def loss(y_true, y_pred):
+        err = y_true - y_pred
+        return K.mean(K.maximum(tau * err, (tau - 1) * err), axis=-1)
+    return loss
+
+X = np.zeros([len(m_b_df['number_sensors']), 2])
+X[:, 0] = np.array(m_b_df['refresh_period'])
+X[:, 1] = np.array(m_b_df['number_sensors'])
+
+y = np.array(m_b_df['m']).reshape(-1, 1)  # Reshape y to be a column vector
+
+scaler_X = StandardScaler()
+scaler_y = StandardScaler()
+
+X = scaler_X.fit_transform(X)
+y = scaler_y.fit_transform(y)
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+
+# Define quantiles
+quantiles = [0.05, 0.5, 0.95]
+
+def objective(trial):
+    n_units_1 = trial.suggest_int('n_units_1', 4, 128)
+    n_units_2 = trial.suggest_int('n_units_2', 4, 128)
+    learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e-1)
+    batch_size = trial.suggest_int('batch_size', 8, 128)
+
+    inputs = Input(shape=(2,))
+    x = Dense(n_units_1, activation='relu')(inputs)
+    x = Dense(n_units_2, activation='relu')(x)
+
+    outputs = [Dense(1, name=f"quantile_{int(q*100)}")(x) for q in quantiles]
+
+    model = Model(inputs=inputs, outputs=outputs)
+
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+                  loss=[pinball_loss(q) for q in quantiles])
+
+    history = model.fit(X_train, y_train, batch_size=batch_size, epochs=50, verbose=0, validation_split=0.2)
+
+    val_loss = np.mean(history.history['val_loss'])
+    return val_loss
+
+study = optuna.create_study(direction='minimize')
+study.optimize(objective, n_trials=50)
+
+# Train the model with the best hyperparameters
+best_params = study.best_params
+n_units_1 = best_params['n_units_1']
+n_units_2 = best_params['n_units_2']
+learning_rate = best_params['learning_rate']
+batch_size = best_params['batch_size']
+
+inputs = Input(shape=(2,))
+x = Dense(n_units_1, activation='relu')(inputs)
+x = Dense(n_units_2, activation='relu')(x)
+outputs = [Dense(1, name=f"quantile_{int(q*100)}")(x) for q in quantiles]
+model = Model(inputs=inputs, outputs=outputs)
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+              loss=[pinball_loss(q) for q in quantiles])
+
+history = model.fit(X_train, y_train, batch_size=batch_size, epochs=200, verbose=1)
+model.save('./energy_model_fixed_b.h5')
+#+end_src
+
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+plt.figure(figsize=(12, 6))
+plt.plot(history.history['loss'], label='Total Loss')
+plt.plot(history.history['quantile_5_loss'], label='Quantile 5th Loss')
+plt.plot(history.history['quantile_50_loss'], label='Quantile 50th Loss')
+plt.plot(history.history['quantile_95_loss'], label='Quantile 95th Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('Loss Function Evolution Over Epochs')
+plt.legend()
+plt.grid(True)
+plt.show()
+#+end_src
+
+#+RESULTS:
+[[./.ob-jupyter/7a258b7fcca2a8ec4bbb7e9f96a1b121eb8ec33e.png]]
+
+
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+predictions = model.predict(X_test)
+print('Best hyperparameters: ', study.best_params)
+# Inverse transform predictions to the original scale
+predictions = [scaler_y.inverse_transform(pred) for pred in predictions]
+y_test_inv = scaler_y.inverse_transform(y_test)
+
+# Plotting predictions vs actual values for the test set
+plt.figure(figsize=(12, 6))
+plt.scatter(scaler_X.inverse_transform(X_test)[:, 0], y_test_inv, alpha=0.3, label='Actual Data')
+for i, prediction in enumerate(predictions):
+    plt.scatter(scaler_X.inverse_transform(X_test)[:, 0], prediction, alpha=0.3, label=f'{int(quantiles[i]*100)}th Quantile')
+
+plt.legend()
+plt.xlabel('Refresh Period')
+plt.ylabel('m')
+plt.title('Quantile Regression Predictions vs Actual Values')
+plt.show()
+
+plt.figure(figsize=(12, 6))
+plt.scatter(scaler_X.inverse_transform(X_test)[:, 1], y_test_inv, alpha=0.3, label='Actual Data')
+for i, prediction in enumerate(predictions):
+    plt.scatter(scaler_X.inverse_transform(X_test)[:, 1], prediction, alpha=0.3, label=f'{int(quantiles[i]*100)}th Quantile')
+
+plt.legend()
+plt.xlabel('Number of Sensors')
+plt.ylabel('m')
+plt.title('Quantile Regression Predictions vs Actual Values')
+plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: 1/8 [==>...........................] - ETA: 0s8/8 [==============================] - 0s 2ms/step
+: Best hyperparameters:  {'n_units_1': 52, 'n_units_2': 102, 'learning_rate': 0.005129049480964481, 'batch_size': 18}
+[[./.ob-jupyter/d58bb3e67dee1ea44066f5946f7ff39dc9c5dae0.png]]
+[[./.ob-jupyter/ebe41307127f735bbbe33fd55dbdc63ef7f3e8e2.png]]
+:END:
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+refresh_periods = np.arange(1,61)
+number_sensors = np.arange(1, 201)
+grid_refresh_periods, grid_number_sensors = np.meshgrid(refresh_periods, number_sensors)
+xx = np.c_[grid_refresh_periods.ravel(), grid_number_sensors.ravel()]
+
+#print(xx)
+xx = scaler_X.transform(xx)
+predictions = model.predict(xx)
+
+predictions = [scaler_y.inverse_transform(pred) for pred in predictions]
+y_test_inv = scaler_y.inverse_transform(y_test)
+
+#print(xx)
+
+plt.figure(figsize=(10, 10))
+plt.plot(scaler_X.inverse_transform(X_test)[:,0], y_test_inv,'x', label='Actual Data')
+for i, prediction in enumerate(predictions):
+    if(i==1):
+        plt.plot(scaler_X.inverse_transform(xx)[:,0], prediction,'k.', label=f'{int(quantiles[i]*100)}th Quantile')
+    else:
+        plt.plot(scaler_X.inverse_transform(xx)[:,0], prediction,'r.', label=f'{int(quantiles[i]*100)}th Quantile')
+
+plt.legend()
+plt.xlabel('Refresh Period')
+plt.ylabel('m')
+plt.title('Quantile Regression Predictions vs Actual Values')
+plt.grid()
+plt.show()
+
+plt.figure(figsize=(10, 10))
+plt.plot(scaler_X.inverse_transform(X_test)[:, 1], y_test_inv,'x', label='Actual Data')
+for i, prediction in enumerate(predictions):
+    if(i==1):
+        plt.plot(scaler_X.inverse_transform(xx)[:,1], prediction,'.', label=f'{int(quantiles[i]*100)}th Quantile')
+    else:
+        plt.plot(scaler_X.inverse_transform(xx)[:,1], prediction,'.', label=f'{int(quantiles[i]*100)}th Quantile')
+plt.legend()
+plt.xlabel('Number of Sensors')
+plt.ylabel('m')
+plt.title('Quantile Regression Predictions vs Actual Values')
+plt.grid()
+plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+:   1/375 [..............................] - ETA: 6s 31/375 [=>............................] - ETA: 0s 61/375 [===>..........................] - ETA: 0s 91/375 [======>.......................] - ETA: 0s120/375 [========>.....................] - ETA: 0s149/375 [==========>...................] - ETA: 0s177/375 [=============>................] - ETA: 0s208/375 [===============>..............] - ETA: 0s239/375 [==================>...........] - ETA: 0s270/375 [====================>.........] - ETA: 0s301/375 [=======================>......] - ETA: 0s332/375 [=========================>....] - ETA: 0s363/375 [============================>.] - ETA: 0s375/375 [==============================] - 1s 2ms/step
+[[./.ob-jupyter/fe04fe2ae67564b9049637092b152f6441589841.png]]
+[[./.ob-jupyter/5ca80627ecdcc3cb8cf64a4895ce026b1c7c6f22.png]]
+:END:
+** Training metrics
+#+begin_src jupyter-python :kernel iotvar_powerprofiler :results silent
+quantiles = [0.05, 0.5, 0.95]
+
+def pinball_loss(tau):
+    def loss(y_true, y_pred):
+        err = y_true - y_pred
+        return K.mean(K.maximum(tau * err, (tau - 1) * err), axis=-1)
+    return loss
+
+def create_model(learning_rate=0.005129049480964481):
+    inputs = Input(shape=(2,))
+    x = Dense(52, activation='relu')(inputs)
+    x = Dense(102, activation='relu')(x)
+    outputs = [Dense(1, name=f"quantile_{int(q*100)}")(x) for q in quantiles]
+    model = Model(inputs=inputs, outputs=outputs)
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+                  loss=[pinball_loss(q) for q in quantiles])
+    return model
+
+X = np.zeros([len(m_b_df['number_sensors']), 2])
+X[:, 0] = np.array(m_b_df['refresh_period'])
+X[:, 1] = np.array(m_b_df['number_sensors'])
+
+y = np.array(m_b_df['m']).reshape(-1, 1)
+
+scaler_X = StandardScaler()
+scaler_y = StandardScaler()
+
+X = scaler_X.fit_transform(X)
+y = scaler_y.fit_transform(y)
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=33)
+
+num_runs = 10  # Number of training runs
+metrics = {
+    'coverage_90': [],
+    'avg_pinball_loss': [],
+    'mean_interval_width': []
+}
+
+for run in range(num_runs):
+    tf.random.set_seed(run)  # Set random seed for reproducibility
+
+    #relu
+    model = create_model()
+    model.fit(X_train, y_train, batch_size=18, epochs=200, verbose=0)
+
+    y_pred = model.predict(X_test)
+    y_pred_5th, y_pred_50th, y_pred_95th = y_pred
+
+    # Inverse transform the predictions and the test set true values
+    y_test_inv = scaler_y.inverse_transform(y_test)
+    y_pred_5th_inv = scaler_y.inverse_transform(y_pred_5th)
+    y_pred_50th_inv = scaler_y.inverse_transform(y_pred_50th)
+    y_pred_95th_inv = scaler_y.inverse_transform(y_pred_95th)
+
+    # Calculate coverage probability
+    coverage_90 = np.mean((y_test_inv >= y_pred_5th_inv) & (y_test_inv <= y_pred_95th_inv))
+    metrics['coverage_90'].append(coverage_90)
+
+    # Calculate pinball loss for each quantile
+    def pinball_loss_np(y_true, y_pred, quantile):
+        return np.mean([max(quantile * (y - y_hat), (quantile - 1) * (y_hat - y)) for y, y_hat in zip(y_true, y_pred)])
+
+    pinball_loss_5th = pinball_loss_np(y_test_inv, y_pred_5th_inv, 0.05)
+    pinball_loss_50th = pinball_loss_np(y_test_inv, y_pred_50th_inv, 0.50)
+    pinball_loss_95th = pinball_loss_np(y_test_inv, y_pred_95th_inv, 0.95)
+
+    avg_pinball_loss = (pinball_loss_5th + pinball_loss_50th + pinball_loss_95th) / 3
+    metrics['avg_pinball_loss'].append(avg_pinball_loss)
+
+    # Calculate mean interval width
+    mean_interval_width = np.mean(y_pred_95th_inv - y_pred_5th_inv)
+    metrics['mean_interval_width'].append(mean_interval_width)
+#+end_src
+
+Relu metrics
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+for metric in metrics:
+    values = metrics[metric]
+    mean_value = np.mean(values)
+    std_value = np.std(values)
+    print(f'{metric}: {mean_value:.4f} ± {std_value:.4f}')
+#+end_src
+
+#+RESULTS:
+: coverage_90: 0.8797 ± 0.0294
+: avg_pinball_loss: 0.0103 ± 0.0032
+: mean_interval_width: 0.0686 ± 0.0087
+** Saving input and output scalers
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+X = np.zeros([len(m_b_df['number_sensors']), 2])
+X[:, 0] = np.array(m_b_df['refresh_period'])
+X[:, 1] = np.array(m_b_df['number_sensors'])
+
+y = np.array(m_b_df['m']).reshape(-1, 1)  # Reshape y to be a column vector
+
+scaler_X = StandardScaler()
+scaler_y = StandardScaler()
+
+X = scaler_X.fit_transform(X)
+y = scaler_y.fit_transform(y)
+
+dump(scaler_X, 'input_scaler.bin', compress=True)
+dump(scaler_y, 'output_scaler.bin', compress=True)
+#+end_src
+* Inferencing with the model
+** Loading input and output scalers
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+scaler_X = load('input_scaler.bin')
+scaler_y = load('output_scaler.bin')
+#+end_src
+** Loading the network and inferencing
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+def pinball_loss(tau):
+    def loss(y_true, y_pred):
+        err = y_true - y_pred
+        return K.mean(K.maximum(tau * err, (tau - 1) * err), axis=-1)
+    return loss
+
+losses = {f'quantile_{int(q*100)}': pinball_loss(q) for q in [0.05, 0.5, 0.95]}
+
+# Load the model
+loaded_model = load_model('./energy_model_fixed_b.h5', compile = False)
+
+loaded_model.summary()
+
+loaded_model.compile(optimizer = 'adam',loss = losses)
+# Scale new data using the same scalers
+
+refresh_periods = np.arange(1,2)
+number_sensors = np.arange(200, 201)
+grid_refresh_periods, grid_number_sensors = np.meshgrid(refresh_periods, number_sensors)
+xx = np.c_[grid_refresh_periods.ravel(), grid_number_sensors.ravel()]
+
+X_new = scaler_X.transform(xx)
+y_pred = loaded_model.predict(X_new)
+
+# Inverse transform the predictions if needed
+m_pred_5th, m_pred_50th, m_pred_95th = y_pred
+m_pred_5th_inv = scaler_y.inverse_transform(m_pred_5th)
+m_pred_50th_inv = scaler_y.inverse_transform(m_pred_50th)
+m_pred_95th_inv = scaler_y.inverse_transform(m_pred_95th)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Model: "model_89"
+__________________________________________________________________________________________________
+ Layer (type)                Output Shape                 Param #   Connected to
+==================================================================================================
+ input_90 (InputLayer)       [(None, 2)]                  0         []
+
+ dense_178 (Dense)           (None, 52)                   156       ['input_90[0][0]']
+
+ dense_179 (Dense)           (None, 102)                  5406      ['dense_178[0][0]']
+
+ quantile_5 (Dense)          (None, 1)                    103       ['dense_179[0][0]']
+
+ quantile_50 (Dense)         (None, 1)                    103       ['dense_179[0][0]']
+
+ quantile_95 (Dense)         (None, 1)                    103       ['dense_179[0][0]']
+
+==================================================================================================
+Total params: 5871 (22.93 KB)
+Trainable params: 5871 (22.93 KB)
+Non-trainable params: 0 (0.00 Byte)
+__________________________________________________________________________________________________
+1/1 [==============================] - ETA: 0s1/1 [==============================] - 0s 164ms/step
+#+end_example
+
+** Predictions for all sensors
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+refresh_periods = np.array([60]).reshape(-1,1)
+number_sensors = np.array([25,50,75,100,125,150,175,200])
+grid_refresh_periods, grid_number_sensors = np.meshgrid(refresh_periods, number_sensors)
+xx = np.c_[grid_refresh_periods.ravel(), grid_number_sensors.ravel()]
+
+X_new = scaler_X.transform(xx)
+y_pred = loaded_model.predict(X_new)
+
+m_pred_5th, m_pred_50th, m_pred_95th = y_pred
+m_pred_5th_inv = scaler_y.inverse_transform(m_pred_5th)
+m_pred_50th_inv = scaler_y.inverse_transform(m_pred_50th)
+m_pred_95th_inv = scaler_y.inverse_transform(m_pred_95th)
+#+end_src
+** Metrics for all sensors
+#+begin_src jupyter-python :kernel iotvar_powerprofiler
+def pinball_loss(y_true, y_pred, quantile):
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    err = y_true - y_pred
+    loss_vals = np.maximum(err * quantile, err * (quantile - 1))
+    return np.mean(loss_vals)
+
+def stack_vectors_from_list(vectors):
+    min_length = min(len(v) for v in vectors)
+    t = np.arange(T,(min_length+1)*T,T)
+    trimmed_vectors = [v[:min_length] for v in vectors]
+    matrix = np.stack(trimmed_vectors)
+    return matrix,t
+
+real_energy = pl.read_ndjson('../data/final_data/coefficients_fixed_b/curves/60sec_curves.json')
+real_energy_indiv_list = []
+energy_np_list = []
+coverage_90_list = []
+pinball_loss_list = []
+present_sens = []
+mean_widths = []
+real_median_curves = []
+time_np_list = []
+freq = 333
+T = 1/freq
+
+for num_sens in np.arange(1,9)*25:
+    real_energy_indiv = real_energy.filter(pl.col("number_sensors")==num_sens)
+    if (real_energy.filter(pl.col("number_sensors")==num_sens).shape[0]!=0):
+        real_energy_indiv_list.append(real_energy_indiv)
+        present_sens.append(num_sens)
+
+for group in real_energy_indiv_list:
+    energy_np, t = stack_vectors_from_list(group['energy'].to_numpy())
+    energy_np_list.append(energy_np)
+    time_np_list.append(t)
+
+for i in range(len(energy_np_list)):
+    coverage_90_scores = []
+    pinball_losses = []
+    median_values = []
+
+    t = np.array(time_np_list[i]).reshape(-1,1)
+    temp_t = np.ones([1,len(present_sens)])
+    time = np.matmul(t,temp_t).T
+
+    E_5_all =  m_pred_5th_inv*time
+    E_50_all = m_pred_50th_inv*time
+    E_95_all = m_pred_95th_inv*time
+
+    for j in range(len(energy_np_list[i][0,:])):
+        coverage_90 = np.mean((energy_np_list[i][:,j] >= E_5_all[i,j]) & (energy_np_list[i][:,j] <= E_95_all[i,j]))
+        coverage_90_scores.append(coverage_90)
+        pinball_loss_5th = pinball_loss(energy_np_list[i][:,j], E_5_all[i,j], 0.05)
+        pinball_loss_50th = pinball_loss(energy_np_list[i][:,j], E_50_all[i,j], 0.50)
+        pinball_loss_95th = pinball_loss(energy_np_list[i][:,j], E_95_all[i,j], 0.95)
+        avg_pinball_loss = (pinball_loss_5th + pinball_loss_50th + pinball_loss_95th) / 3
+        pinball_losses.append(avg_pinball_loss)
+        median_energy_val = np.median(energy_np_list[i][:,j])
+        median_values.append(median_energy_val)
+
+    coverage_90_scores = np.array(coverage_90_scores)
+    coverage_90_list.append(coverage_90_scores)
+    pinball_losses = np.array(pinball_losses)
+    pinball_loss_list.append(pinball_losses)
+    mean_interval_width = np.mean(E_95_all[i] - E_5_all[i])
+    mean_widths.append(mean_interval_width)
+    median_values = np.array(median_values)
+    real_median_curves.append(median_values)
+
+coverages,_ = stack_vectors_from_list(coverage_90_list)
+pinballs,_ = stack_vectors_from_list(pinball_loss_list)
+medians,_ = stack_vectors_from_list(real_median_curves)
+lbs = []
+for i in range(len(present_sens)):
+    lbs.append(str(present_sens[i])+' sensors')
+lbs = np.array(lbs)
+plt.plot(coverages.T*100,label = lbs)
+plt.xlabel('Time')
+plt.ylabel('Percentage')
+plt.title('90$\%$ Coverage over Time')
+plt.legend()
+plt.savefig('../images/model_benchmark/fixed_b/coverage_r_60sec.png',dpi=200)
+plt.show()
+#+end_src
